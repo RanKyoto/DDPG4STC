@@ -12,5 +12,6 @@ Advanced Robotics (2023).(pending review).
 These code testing our work
 
 ```
+pip install gym==0.21.0
 pip install tensorflow-gpu
 ```
