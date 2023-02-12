@@ -1,15 +1,12 @@
 """
-Edited by Ran, Wang
+Author: Ran@Kyoto
+URL: https://github.com/RanKyoto/DDPG4STC
 Quanser Rotary Inverted Pendulum with Wiener Process Disturbunce
 Final Edit Date: 2023.02.12
-History:
-1.Fix some mistakes about disturbunce calculation. 
 """
 
-import math
 import gym
 from gym import spaces
-from gym.utils import seeding
 import numpy as np
 
 
@@ -121,14 +118,11 @@ class RotaryPendulumEnv(gym.Env):
         self.B = B.reshape(4,1)
 
         #Configuration
-        self.voltage_mag = 8.0 # max input voltage magnitude 
         self.dt = 0.005  # seconds between state updates
-        self.kinematics_integrator = "euler"
  
+        # Observation bound:
         self.alpha_threshold_radians = np.pi
         self.theta_threshold = np.pi/2
-
-        # Observation bound:
         high = np.array(
             [
                 self.theta_threshold * 2,np.finfo(np.float32).max, 1,1,np.finfo(np.float32).max 
@@ -138,6 +132,7 @@ class RotaryPendulumEnv(gym.Env):
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         # Action bounds:
+        self.voltage_mag = 8.0 # max input voltage magnitude 
         self.action_space = spaces.Box(
             low=-self.voltage_mag,
             high=self.voltage_mag,
@@ -145,15 +140,8 @@ class RotaryPendulumEnv(gym.Env):
             dtype=np.float32
         )
 
-        self.seed()
         self.viewer = None
         self.state = None
-
-        self.steps_beyond_done = None
-
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
     
     def set_noise(self,EnNosie=True):
         if EnNosie:
@@ -169,12 +157,10 @@ class RotaryPendulumEnv(gym.Env):
         assert self.action_space.contains(action), err_msg
 
         theta, theta_dot, alpha, alpha_dot = self.state
-        #Edited by Ran, Wang
+
         Vm = np.clip(action, -self.voltage_mag, self.voltage_mag)[0]
-        # Ctheta = math.cos(theta)
-        # Stheta = math.sin(theta)
-        Calpha = math.cos(alpha)
-        Salpha = math.sin(alpha)
+        Calpha = np.cos(alpha)
+        Salpha = np.sin(alpha)
 
         # For the interested reader:
         # https://www.quanser.com/products/rotary-inverted-pendulum/
@@ -192,31 +178,25 @@ class RotaryPendulumEnv(gym.Env):
         d = self.C9
         f = self.C10 * Calpha * Salpha * (theta_dot ** 2) + self.C11 * Salpha - self.Bp * alpha_dot
         tmp = a * d - b * c
-        thetaacc = (d * e - b * f)/tmp +  self.W_en * self.acc_noise(variance=4)
-        alphaacc = (a * f - c * e)/tmp +  self.W_en * self.acc_noise(variance=16)
-
-        if self.kinematics_integrator == "euler":
-            theta = theta + self.dt * theta_dot
-            theta_dot = theta_dot + self.dt * thetaacc
-            alpha = alpha + self.dt * alpha_dot
-            alpha_dot = alpha_dot + self.dt * alphaacc
-        else:  # semi-implicit euler
-            theta_dot = theta_dot + self.dt * thetaacc
-            theta = theta + self.dt * theta_dot
-            alpha_dot = alpha_dot + self.dt * alphaacc
-            alpha = alpha + self.dt * alpha_dot
-            
+        thetaacc = (d * e - b * f)/tmp 
+        alphaacc = (a * f - c * e)/tmp 
+        
+        theta = theta + self.dt * theta_dot
+        theta_dot = theta_dot + self.dt * thetaacc +  self.W_en * self.acc_noise(variance=4)
+        alpha = alpha + self.dt * alpha_dot
+        alpha_dot = alpha_dot + self.dt * alphaacc +  self.W_en * self.acc_noise(variance=16)
+       
         self.state = (theta, theta_dot, angle_normalize(alpha), alpha_dot)
 
         done = bool(
             theta < -self.theta_threshold
             or theta > self.theta_threshold
-        )
-        #Edited by Ran, Wang
+        ) #Out of range.
+
         cost = 2 * (theta ** 2) + 4 * (angle_normalize(alpha) ** 2)  + 0.01 * (Vm ** 2)\
             + 0.1 * (theta_dot ** 2) + 0.05 * (theta_dot ** 2)
-        if(done):
-            cost += 500 
+        if done:
+            cost += 500 #Out of range punishment.
         return self._get_obs(), -cost, done, {}
 
     def reset(self,IsUp=False ,x0 = None):
@@ -232,26 +212,22 @@ class RotaryPendulumEnv(gym.Env):
             random_position = np.random.uniform(-1,1)
             high = np.pi/3
             random_angle = angle_normalize(np.pi + np.random.uniform(-high,high))
+        
         self.state = np.array([random_position,0,random_angle,0])
         return self._get_obs()
     
-    def obs_noise(self,variance = [0.01,0.04,0.01,0.09]):#
-        '''Observation noise is represented as White Noise variance should be a np.array '''
-        variance = np.array(variance)
-        return np.random.normal(np.zeros(np.shape(variance)),variance)
-
     def acc_noise(self,variance = 1):
         '''Disturbance is represented as Wiener Process variance = sigma^2 '''
         return np.random.normal(0,variance*self.dt)
 
     def _get_obs(self):
         '''
-        theta       Rotary Arm angle                - pi/4 rad          pi/4 rad
+        theta       Rotary Arm angle                - pi/2 rad          pi/2 rad
         theta_dot   Rotary Arm Angular Velocity     -Inf                Inf
         alpha       Pole Angle                      - pi rad            pi rad
         alpha_dot   Pole Angular Velocity           -Inf                Inf
         '''
-        theta, theta_dot, alpha, alpha_dot = self.state + self.W_en * self.obs_noise()
+        theta, theta_dot, alpha, alpha_dot = self.state
         return np.array([theta,theta_dot, np.cos(alpha), np.sin(alpha),alpha_dot], dtype=np.float32) 
 
     def render(self, mode="human"):
@@ -317,8 +293,6 @@ class RotaryPendulumEnv(gym.Env):
             self.axle.set_color(0.9, 0.9, 0.9)
             self.viewer.add_geom(self.axle)
 
-
-
             self._pole_geom = pole
 
         if self.state is None:
@@ -335,7 +309,7 @@ class RotaryPendulumEnv(gym.Env):
         pole.v = [(l, b), (l, t), (r, t), (r, b)]
 
         x = self.state
-        cartx = x[0] * scale + screen_width / 2.0  # MIDDLE OF CART
+        cartx = x[0] * scale + screen_width / 2.0  
         self.carttrans.set_translation(cartx, carty)
         self.poletrans.set_rotation(-x[2])
         armrot = np.arctan(x[0]*scale/armlen)
