@@ -1,7 +1,9 @@
 """
 Edited by Ran, Wang
-Quanser Rotary Inverted Pendulum with Wiener Process
-Final Edit Date: 2021.12.17
+Quanser Rotary Inverted Pendulum with Wiener Process Disturbunce
+Final Edit Date: 2023.02.12
+History:
+1.Fix some mistakes about disturbunce calculation. 
 """
 
 import math
@@ -34,41 +36,59 @@ class RotaryPendulumEnv(gym.Env):
         Voltage [-voltage_mag,voltage_mag]
 
     Reward:
-        (Edited by Ran,Wang)
-        stage cost is defigned like optimal control problem
+        Stage cost is defined like optimal control problem, 
+        which consider both control performance and energy cost.
 
-    Starting State:
-        All observations are assigned a uniform random value in [-0.05..0.05]
     """
 
-    metadata = {"render.modes": ["human", "rgb_array"], "video.frames_per_second": 50}
-
     def __init__(self):
-        self.g  = 9.81    # Gravitational constant                         (m/s^2)
-        K_IN2M  = 0.0254 # from Inch to Meter    
-        K_OZ2N = 0.2780139  # from oz-force to N
-        K_N2OZ = 1 / K_OZ2N # from N to oz-force
-        K_RDPS2RPM = 60 / ( 2 * np.pi ) # from rad/s to RPM
+        self.g  = 9.81    
+        # Gravitational constant (m/s^2)
+        K_IN2M  = 0.0254 
+        # from Inch to Meter    
+        K_OZ2N = 0.2780139  
+        # from oz-force to N
+        K_N2OZ = 1 / K_OZ2N 
+        # from N to oz-force
+        K_RDPS2RPM = 60 / ( 2 * np.pi ) 
+        # from rad/s to RPM
         '''Parameters of 12-inch Pendlulum'''
-        self.Mp = 0.127  # Pendulum Mass with T-fitting                   (kg)
-        self.Lp = (13 + 1 / 4) * K_IN2M # Pendulum Full Length (with T-fitting, from axis of rotation to tip) (m)
-        #self.lp = (6 + 1 / 8) * K_IN2M  # Distance from Pivot to Centre Of Gravity: calculated experimentally (m)
-        self.Jp = self.Mp * (self.Lp ** 2) /12  # Pendulum Moment of Inertia (kg.m^2) - approximation         (kg.m^2)
-        self.Bp = 0.0024                        # Equivalent Viscous Damping Coefficient                      (N.m.s/rad)
+        self.Mp = 0.127  
+        # Pendulum Mass with T-fitting (kg)
+        self.Lp = (13 + 1 / 4) * K_IN2M 
+        # Pendulum Full Length (with T-fitting, from axis of rotation to tip) (m)
+        #self.lp = (6 + 1 / 8) * K_IN2M  
+        # Distance from Pivot to Centre Of Gravity: calculated experimentally (m)
+        self.Jp = self.Mp * (self.Lp ** 2) /12  
+        # Pendulum Moment of Inertia (kg.m^2) - approximation (kg.m^2)
+        self.Bp = 0.0024                        
+        # Equivalent Viscous Damping Coefficient (N.m.s/rad)
         '''Parameters of Rotary Arm'''
-        self.Mr = 0.257                         # Arm Mass with T-fitting                                             (kg)
-        self.Lr = 8.5 * K_IN2M                  # Full Length of Arm (from axis of rotation to tip)                   (m)
-        #self.lr = (2 + 7 / 16) * K_IN2M         # Distance from Pivot to Centre Of Gravity: calculated experimentally (m)
-        self.Jr = self.Mr * (self.Lr ** 2) /12  # Arm Moment of Inertia (kg.m^2) - approximation                      (kg.m^2)
-        self.Br = 0.0024                        # Equivalent Viscous Damping Coefficient                              (N.m.s/rad)
+        self.Mr = 0.257                         
+        # Arm Mass with T-fitting (kg)
+        self.Lr = 8.5 * K_IN2M                  
+        # Full Length of Arm (from axis of rotation to tip) (m)
+        # self.lr = (2 + 7 / 16) * K_IN2M         
+        # Distance from Pivot to Centre Of Gravity: calculated experimentally (m)
+        self.Jr = self.Mr * (self.Lr ** 2) /12  
+        # Arm Moment of Inertia (kg.m^2) - approximation (kg.m^2)
+        self.Br = 0.0024                        
+        # Equivalent Viscous Damping Coefficient (N.m.s/rad)
         '''Parameters of Servo Motor'''
-        self.Rm = 2.6 # Armature Resistance (Ohm)
-        self.kt = 1.088 * K_OZ2N * K_IN2M  # = .00767  Motor Torque Constant (N.m/A)
-        #M_e_max = 0.566 * K_OZ2N * K_IN2M # = 0.566 oz.in (parameter not used) Continuous torque (N.m/A)
-        self.km = 0.804 / 1000 * K_RDPS2RPM # = .00767 Motor Back-EMF Constant (V.s/rd)
-        self.Kg = 70 # Internal Gear Ratio (of the Planetary Gearbox)
-        self.eta_g = 0.90 # Gearbox Efficiency
-        self.eta_m = 0.69 # Motor ElectroMechanical Efficiency
+        self.Rm = 2.6 
+        # Armature Resistance (Ohm)
+        self.kt = 1.088 * K_OZ2N * K_IN2M  
+        # = .00767  Motor Torque Constant (N.m/A)
+        # M_e_max = 0.566 * K_OZ2N * K_IN2M 
+        # = 0.566 oz.in (parameter not used) Continuous torque (N.m/A)
+        self.km = 0.804 / 1000 * K_RDPS2RPM 
+        # = .00767 Motor Back-EMF Constant (V.s/rd)
+        self.Kg = 70 
+        # Internal Gear Ratio (of the Planetary Gearbox)
+        self.eta_g = 0.90 
+        # Gearbox Efficiency
+        self.eta_m = 0.69 
+        # Motor ElectroMechanical Efficiency
         '''Constant Terms for Kinematic'''
         self.C1 = self.Mp * (self.Lr ** 2) + 1/4 * self.Mp * (self.Lp**2)
         self.C2 = 1/4 * self.Mp * (self.Lp ** 2)
@@ -85,7 +105,7 @@ class RotaryPendulumEnv(gym.Env):
         self.W_en = 0
         ''' State Space Representation '''
         Jt = self.Jr*self.Jp + self.Mp*((self.Lp/2)**2)*self.Jr + self.Jp*self.Mp*(self.Lr**2)
-        #!!!Note that the Related state should be [theta,alpha,theta_dot,alpha_dot],
+        #!!!Note that the Related state should be [theta,phi,theta_dot,phi_dot],
         #!!!which is different form the sequence of self.state
         A =np.array( [[0, 0, 1, 0],
             [0, 0, 0, 1],
@@ -108,19 +128,22 @@ class RotaryPendulumEnv(gym.Env):
         self.alpha_threshold_radians = np.pi
         self.theta_threshold = np.pi/2
 
-        # Angle limit set to 2 * theta_threshold_radians so failing observation
-        # is still within bounds.
+        # Observation bound:
         high = np.array(
             [
-                self.theta_threshold * 2,np.finfo(np.float32).max, 1,1,np.finfo(np.float32).max #x, cos(theta), sin(theta)
-            ],
+                self.theta_threshold * 2,np.finfo(np.float32).max, 1,1,np.finfo(np.float32).max 
+            ],  #theta, theta_dot, cos(phi), sin(phi), phi_dot
             dtype=np.float32,
         )
-        #Edited by Ran, Wang
-        self.action_space = spaces.Box(
-            low=-self.voltage_mag, high=self.voltage_mag, shape=(1,), dtype=np.float32
-        )
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
+
+        # Action bounds:
+        self.action_space = spaces.Box(
+            low=-self.voltage_mag,
+            high=self.voltage_mag,
+            shape=(1,),
+            dtype=np.float32
+        )
 
         self.seed()
         self.viewer = None
