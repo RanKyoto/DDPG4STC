@@ -76,3 +76,36 @@ class CriticModel(Model):
 
     out =  self.dQ(Q) #Qπ
     return out
+
+class STCActionNoise:
+    '''
+        the noise for self-triggered control input including two parts
+        Input u             : Ornstein-Uhlenbeck_process
+        Triggering time tau : White noise
+    '''
+    def __init__(self, mean = [0,0], std_deviation = [0.1,0.05], theta=0.15, dt=0.01):
+        # Noise for u
+        self.theta = theta
+        self.miu_u = mean[0]
+        self.sigma_u = std_deviation[0]
+        self.dt = dt
+        self.reset()
+        # Noise for tau
+        self.miu_tau = mean[1]
+        self.sigma_tau = std_deviation[1]
+
+    def __call__(self):
+        # Ornstein-Uhlenbeck_process: https://en.wikipedia.org/wiki/Ornstein-Uhlenbeck_process
+        # dxt = theta * (miu - x_t)dt + sigma dWt
+        x = (
+            self.x_prev
+            + self.theta * (self.miu_u - self.x_prev) * self.dt
+            + self.sigma_u * np.sqrt(self.dt) * np.random.normal()
+        )
+        self.x_prev = x
+
+        # Gaussian noise : https://en.wikipedia.org/wiki/Gaussian_noise
+        return x, np.random.normal(self.miu_tau,self.sigma_tau)
+
+    def reset(self):
+        self.x_prev = self.miu_u
