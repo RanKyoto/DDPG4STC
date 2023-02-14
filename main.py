@@ -11,18 +11,26 @@ import os
 from ddpg4stc import DDPG4STC
 from utils.simulation_rp import simulation
 
-os.environ['CUDA_VISIBLE_DEVICES']='3' # use GPU
-
 def training():
-    agent = DDPG4STC(name='demo')
+    '''training an STC policy for a rotary inverted pendulum'''
+
+    os.environ['CUDA_VISIBLE_DEVICES']='3' # use GPU
+    agent = DDPG4STC(problem= "RotaryPend-v0",name='default')
     agent.algorithm_ptc(Ne=20000)
     agent.algorithm_stc(Ne=20000)
 
-def demo():
+def demo(Type='stc',Disturbunce=False):
+    '''
+        testing the learned controllers
+
+        Type=  'stc' (self-triggered controller)  
+
+        Type = 'ptc' (periodic-triggered controller)
+    '''
     agent = DDPG4STC(problem= "RotaryPend-v1",name='demo')
-    agent.load(version='ptc',IsLoadReplay=False)
-    simulation(agent=agent)
+    agent.load(version=Type,IsLoadReplay=False)
+    simulation(agent=agent,IsNoise=Disturbunce)
 
 if __name__ == '__main__':   
-    demo()
+    demo(Type='stc',Disturbunce=False)
     pass

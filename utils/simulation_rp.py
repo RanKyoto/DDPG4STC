@@ -26,7 +26,7 @@ def simulation(agent:SelfDDPG4STC,IsPlot=True,x0=[0,0,-np.pi,0],IsNoise=True,IsZ
         while(t - last_t <= float(action[1])):
             agent.env.render()
             state, reward, done, info = agent.env.step([action[0]])
-            sleep(0.001)
+            sleep(0.005)
             stage_cost += agent.env.dt * reward * np.exp(- agent.alpha * (t - last_t))
 
             t += agent.env.dt
