@@ -56,10 +56,11 @@ class DDPG4STC():
         # STC action noise
         self.noise = STCActionNoise()
 
-    def load(self,version:str='v0'):
+    def load(self,version:str='v0', IsLoadReplay = True):
         '''load check point'''
-        path = './data/{}_{}/'.format(self.name,version) 
-        self.buffer = pickle.load(open(path + 'buffer.replay','rb'))
+        path = './data/{}_{}/'.format(self.name,version)
+        if IsLoadReplay: 
+            self.buffer = pickle.load(open(path + 'buffer.replay','rb'))
         self.actor.load_weights(path + "actor.h5")
         self.critic.load_weights(path + "critic.h5")
         self.target_actor.load_weights(path + "target_actor.h5")

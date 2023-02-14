@@ -20,7 +20,7 @@ def training():
 
 def demo():
     agent = DDPG4STC(problem= "RotaryPend-v1",name='demo')
-    agent.load(version='ptc')
+    agent.load(version='ptc',IsLoadReplay=False)
     simulation(agent=agent)
 
 if __name__ == '__main__':   
