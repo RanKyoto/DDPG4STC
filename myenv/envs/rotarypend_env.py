@@ -99,7 +99,7 @@ class RotaryPendulumEnv(gym.Env):
         self.C10= self.C2
         self.C11= 1/2 * self.Mp * self.Lp * self.g
         '''Noise Enable'''
-        self.W_en = 0
+        self.W_en = 1
         ''' State Space Representation '''
         Jt = self.Jr*self.Jp + self.Mp*((self.Lp/2)**2)*self.Jr + self.Jp*self.Mp*(self.Lr**2)
         #!!!Note that the Related state should be [theta,phi,theta_dot,phi_dot],
@@ -199,11 +199,11 @@ class RotaryPendulumEnv(gym.Env):
             cost += 500 #Out of range punishment.
         return self._get_obs(), -cost, done, {}
 
-    def reset(self,IsUp=False ,x0 = None):
+    def reset(self,x0 = None):
         if x0 is not None:
             self.state = np.array(x0)
             return self._get_obs()
-
+        IsUp= bool(np.random.randint(0,2))
         if(IsUp):
             random_position = np.random.uniform(-0.5,0.5)
             high = np.pi/15

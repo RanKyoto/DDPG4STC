@@ -12,10 +12,9 @@ import tensorflow as tf
 from utils import ActorModel,CriticModel,mkdir,process_bar,ReplayBuffer,STCActionNoise
 import numpy as np
 import pickle
+from typing import TypeVar
 
-os.environ['CUDA_VISIBLE_DEVICES']='3' # use GPU
-
-
+SelfDDPG4STC = TypeVar("SelfDDPG4STC", bound="DDPG4STC")
 
 class DDPG4STC():
     def __init__(self,tau0:float = 0.1, # init tau
@@ -155,32 +154,27 @@ class DDPG4STC():
             Vx_prime = self.critic([next_state_batch, u_prime,tau_prime])
             self.update_tau(state_batch, action_batch, reward_batch, next_state_batch,Vx_prime)
           
-    def policy(self,state):
-        sampled_actions = tf.squeeze(self.actor(state))
+    def policy(self,state, IsExploration=True):
+        actions = tf.squeeze(self.actor(state))
         
-        self.noise.dt=float(sampled_actions[1])
         # Adding noise to action
-        sampled_actions = sampled_actions.numpy() +  self.noise()
+        if IsExploration:
+            self.noise.dt=float(actions[1])
+            actions = actions.numpy() +  self.noise()
 
         # We make sure action is within bounds add triggerting time h bound
-        legal_action = np.clip(sampled_actions, [-8, 0.01], [8, 2.00])
+        legal_actions = np.clip(actions, [-8, 0.01], [8, 2.00])
 
-        return np.squeeze(legal_action)
+        return np.squeeze(legal_actions)
 
-    def train_start(self,Ne=10, IsNew=True, Ntau=0, Nu=99, IsPrint = False):
+    def train_start(self,Ne=10, Ntau=0, Nu=99):
         Nsum = Ntau+Nu
-        if not IsNew:
-            self.load()
-        self.env.set_noise(True)
 
         # To store reward history of each episode
-        ep_reward_list = []
+        ep_cost_list, ep_comcost_list = [],[]
 
-        for ep in range(Ne):
-
-            IsUp= bool(np.random.randint(0,2))
-            prev_state = self.env.reset(IsUp=IsUp)
-            tf_state0 = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)
+        for ep in range(Ne):          
+            prev_state = self.env.reset()
             episodic_reward = 0
             episodic_comcost= 0
 
@@ -190,52 +184,60 @@ class DDPG4STC():
 
                 action = self.policy(tf_prev_state)
                 com_cost = self.beta
-                stage_cost = - self.beta   #stage cost for STC (communication cost is included here)
+                stage_reward = - com_cost  
+                #stage reward for STC (communication cost is included here)
                 last_t = t
-
+                tau = float(action[1]) #triggering time interval
                 # Recieve state and reward from environment.
-                while(t - last_t <= float(action[1])):
+                while(t - last_t <= tau):
                     state, reward, done, info = self.env.step([action[0]])
-                    stage_cost += self.env.dt * reward * np.exp(- self.alpha * (t - last_t))
+                    stage_reward += self.env.dt * reward * np.exp(- self.alpha * (t - last_t))
                     t += self.env.dt
                     if done:
                         break
                     #self.env.render()
                 
-                self.buffer.record((prev_state, action, stage_cost, state))
-                stage_cost *= np.exp(- self.alpha * last_t)
+                if done:
+                    tmp = np.exp(- self.alpha * t) * (1/(1-np.exp(- self.alpha * tau)))
+                    episodic_reward +=  stage_reward * tmp
+                    episodic_comcost+= com_cost * tmp
+                    break
+
+                self.buffer.record((prev_state, action, stage_reward, state))
+                stage_reward *= np.exp(- self.alpha * last_t)
                 com_cost *= np.exp(- self.alpha * last_t)
-                episodic_reward += stage_cost 
+                episodic_reward += stage_reward 
                 episodic_comcost+= com_cost
 
                 self.learn(ep,tau_ep= Ntau, sum_ep= Nsum) #tau_ep=0 means only train actor_u
                 self.update_target(self.target_actor.variables, self.actor.variables, self.sigma)
                 self.update_target(self.target_critic.variables, self.critic.variables, self.sigma)
-
-                if done:
-                    break
+ 
                 prev_state = state
 
             self.noise.reset()
             tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)
 
-            ep_reward_list.append(-episodic_reward)
+            '''negtive episodic reward = episodic cost'''
+            ep_cost_list.append(-episodic_reward)
+            ep_comcost_list.append(episodic_comcost)
 
-            # Mean of last 40 episodes
-            avg_reward = np.mean(ep_reward_list[-40:])
+            # Mean of last 100 episodes
+            avg_cost = np.mean(ep_cost_list[-100:])
+            avg_comcost = np.mean(ep_comcost_list[-100:])
      
-            process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}    '.format(ep,round(avg_reward,3)))
+            process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}[{}]    '.format(ep,round(avg_cost,3),round(avg_comcost,3)))
          
 
 
-    def algorithm_ptc(self,version='ptc',Ne=10000):
-        self.train_start(Ne=Ne, IsNew=True, Ntau=0, Nu=99)
-        self.save(version = version)
+    def algorithm_ptc(self,Ne:int=10000):
+        self.train_start(Ne=Ne, Ntau=0, Nu=99)
+        self.save(version = 'ptc')
 
-    def algorithm_stc(self,version='stc',Ne=10000):
+    def algorithm_stc(self,Ne:int=10000):
         self.load(version = 'ptc')
-        self.train_start(Ne=Ne, IsNew=False, Ntau=1, Nu=499)
-        self.save(version = version)
+        self.train_start(Ne=Ne, Ntau=1, Nu=499)
+        self.save(version = 'stc')
 
 if __name__ == '__main__':   
     pass
