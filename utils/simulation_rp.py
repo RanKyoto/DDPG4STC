@@ -7,7 +7,7 @@ from time import sleep
 def simulation(agent:SelfDDPG4STC,IsPlot=True,x0=[0,0,-np.pi,0],IsNoise=True,IsZeroInput=False):
     ''' simulation for the rotary inverted pendulum'''
     agent.noise = np.array([0,0])
-    prev_state = agent.env.reset(x0=x0)
+    old_state = agent.env.reset(x0=x0)
     agent.env.set_noise(IsNoise)        
     episodic_reward = 0
     theta,theta_dot, Cphi, Sphi, phi_dot = [x0[0]],[x0[1]],[np.cos(x0[2])],[np.sin(x0[2])],[x0[3]]
@@ -16,9 +16,7 @@ def simulation(agent:SelfDDPG4STC,IsPlot=True,x0=[0,0,-np.pi,0],IsNoise=True,IsZ
     t = 0
 
     while True:    
-        tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)
-
-        action = agent.policy(tf_prev_state,IsExploration=False)
+        action = agent.policy(np.expand_dims(old_state,axis=0),IsExploration=False)
 
         stage_cost = - agent.beta   #reward for STC (including communication cost)
         last_t = t
@@ -52,7 +50,7 @@ def simulation(agent:SelfDDPG4STC,IsPlot=True,x0=[0,0,-np.pi,0],IsNoise=True,IsZ
         # End this episode when `done` is True
         if done:
             break
-        prev_state = state
+        old_state = state
     
 
     if(IsPlot == True):

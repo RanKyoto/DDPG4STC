@@ -16,6 +16,7 @@ Include
 pip install panda-gym
 pip install gym==0.21.0
 pip install tensorflow-gpu
+pip install gast==0.3.3
 ```
 
 ## testing

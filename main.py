@@ -3,7 +3,7 @@ Title: Deep Reinforcement Learning for Continuous-Time
        Self-Triggered Control with Experimental Evaluation
 Author: Ran,Wang
 Date created: 2023/02/14
-Last modified: 2022/02/14
+Last modified: 2023/02/14
 Description: Implementing Deep Reinforcement Learning for
              Continuous-time Self-triggered Control (DDPG4STC)
 """
@@ -32,5 +32,6 @@ def demo(Type='stc',Disturbunce=False):
     simulation(agent=agent,IsNoise=Disturbunce)
 
 if __name__ == '__main__':   
+    #training()
     demo(Type='stc',Disturbunce=False)
     pass

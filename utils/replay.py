@@ -2,15 +2,15 @@ import numpy as np
 import tensorflow as tf
 
 class ReplayBuffer:
-    def __init__(self, buffer_capacity=50000, batch_size=64):
+    def __init__(self, action_dim=1, obs_dim=5, buffer_capacity=50000, batch_size=64):
         self.buffer_capacity = buffer_capacity #N_R
         self.batch_size = batch_size           #N_m
         self.buffer_counter = 0
 
-        self.state_buffer = np.zeros((self.buffer_capacity, 5))      # [theta,theta_dot,cos(phi),sin(phi),phi_dot]
-        self.action_buffer = np.zeros((self.buffer_capacity, 2))     # [u, tau]
+        self.state_buffer = np.zeros((self.buffer_capacity, obs_dim))      # [theta,theta_dot,cos(phi),sin(phi),phi_dot]
+        self.action_buffer = np.zeros((self.buffer_capacity, action_dim+1))     # [u, tau]
         self.reward_buffer = np.zeros((self.buffer_capacity, 1))     # [stage cost]
-        self.next_state_buffer = np.zeros((self.buffer_capacity, 5)) # [theta,theta_dot,cos(phi),sin(phi),phi_dot]
+        self.next_state_buffer = np.zeros((self.buffer_capacity, obs_dim)) # [theta,theta_dot,cos(phi),sin(phi),phi_dot]
 
     # (s,a,r,s') obervation tuples
     def record(self, obs_tuple):

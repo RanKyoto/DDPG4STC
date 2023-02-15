@@ -15,23 +15,35 @@ import pickle
 from typing import TypeVar
 
 SelfDDPG4STC = TypeVar("SelfDDPG4STC", bound="DDPG4STC")
+SelfDDPG4STC_Panda = TypeVar("SelfDDPG4STC_Panda", bound="DDPG4STC_Panda")
 
 class DDPG4STC():
     def __init__(self,tau0:float = 0.1, # init tau
                 problem:str = "RotaryPend-v0", # gym env 
                 name:str = 'default', # name of the agent
+                buffer_size:int = 500000, 
                 learning_rate:list=[0.001,0.0001,0.0005] # lr for Q,u,tau
                 ):
 
         self.problem = problem
         self.env = gym.make(self.problem)
         self.name = problem.replace('-','_') + '_' + name
+        
+        action_dim = self.get_action_space_dim()
+        action_scale = self.get_action_scale()
+        obs_dim = self.get_observation_space_dim()
 
-        self.actor = ActorModel(init_tau = tau0)    # pi(x|omega^pi)
-        self.critic = CriticModel()  # Q(x,a|omega^Q)
+        self.actor = ActorModel(init_tau = tau0,
+                            scale=action_scale,
+                            action_dim=action_dim,
+                            obs_dim=obs_dim)    # pi(x|omega^pi)
+        self.critic = CriticModel(action_dim=action_dim, obs_dim=obs_dim)  # Q(x,a|omega^Q)
 
-        self.target_actor = ActorModel()   #pi'(x|omega^pi')
-        self.target_critic = CriticModel() #Q'(x,a|omega^Q')
+        self.target_actor = ActorModel(init_tau = tau0,
+                            scale=action_scale,
+                            action_dim=action_dim,
+                            obs_dim=obs_dim)   #pi'(x|omega^pi')
+        self.target_critic = CriticModel(action_dim=action_dim, obs_dim=obs_dim) #Q'(x,a|omega^Q')
         self.target_actor.set_weights(self.actor.get_weights())
         self.target_critic.set_weights(self.critic.get_weights())
 
@@ -52,9 +64,19 @@ class DDPG4STC():
         # update rate for target network
         self.sigma = 0.01
         # replay buffer
-        self.buffer = ReplayBuffer(buffer_capacity = 500000, batch_size = 128)
+        self.buffer = ReplayBuffer(action_dim=action_dim ,obs_dim= obs_dim,
+                    buffer_capacity = buffer_size, batch_size = 128)
         # STC action noise
-        self.noise = STCActionNoise()
+        self.noise = STCActionNoise(action_dim=action_dim)
+
+    def get_action_space_dim(self)->int:
+        return self.env.action_space.shape[0]
+
+    def get_action_scale(self)->float:
+        return np.min(self.env.action_space.high)
+
+    def get_observation_space_dim(self)->int:
+        return self.env.observation_space.shape[0]
 
     def load(self,version:str='v0', IsLoadReplay = True):
         '''load check point'''
@@ -90,7 +112,7 @@ class DDPG4STC():
                 [next_state_batch, u_target, tau_target], training=True
             )
             y = reward_batch + y_target
-            u_batch, tau_batch= tf.split(action_batch,2,axis=1)
+            u_batch, tau_batch= tf.split(action_batch,[action_batch.shape[1]-1,1],axis=1)
             critic_value = self.critic([state_batch, u_batch, tau_batch], training=True)
             critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))
 
@@ -121,7 +143,7 @@ class DDPG4STC():
                 [next_state_batch, u_target, tau_target], training=True
             )
             y = reward_batch + y_target
-            u_batch, tau_batch= tf.split(action_batch,2,axis=1)
+            u_batch, tau_batch= tf.split(action_batch,[action_batch.shape[1]-1,1],axis=1)
             critic_value = self.critic([state_batch, u_batch, tau_batch], training=True)
             critic_loss = tf.math.reduce_mean(tf.math.square(y - critic_value))
 
@@ -175,15 +197,13 @@ class DDPG4STC():
         ep_cost_list, ep_comcost_list = [],[]
 
         for ep in range(Ne):          
-            prev_state = self.env.reset()
+            old_state = self.env.reset()
             episodic_reward = 0
             episodic_comcost= 0
 
             t = 0
             while True:
-                tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)
-
-                action = self.policy(tf_prev_state)
+                action = self.policy(np.expand_dims(old_state,axis=0))
                 com_cost = self.beta
                 stage_reward = - com_cost  
                 #stage reward for STC (communication cost is included here)
@@ -204,7 +224,7 @@ class DDPG4STC():
                     episodic_comcost+= com_cost * tmp
                     break
 
-                self.buffer.record((prev_state, action, stage_reward, state))
+                self.buffer.record((old_state, action, stage_reward, state))
                 stage_reward *= np.exp(- self.alpha * last_t)
                 com_cost *= np.exp(- self.alpha * last_t)
                 episodic_reward += stage_reward 
@@ -214,10 +234,9 @@ class DDPG4STC():
                 self.update_target(self.target_actor.variables, self.actor.variables, self.sigma)
                 self.update_target(self.target_critic.variables, self.critic.variables, self.sigma)
  
-                prev_state = state
+                old_state = state
 
             self.noise.reset()
-            tf_prev_state = tf.expand_dims(tf.convert_to_tensor(prev_state), 0)
 
             '''negtive episodic reward = episodic cost'''
             ep_cost_list.append(-episodic_reward)
@@ -238,6 +257,106 @@ class DDPG4STC():
     def algorithm_stc(self,Ne:int=10000):
         self.load(version = 'ptc')
         self.train_start(Ne=Ne, Ntau=1, Nu=499)
+        self.save(version = 'stc')
+
+class DDPG4STC_Panda(DDPG4STC):
+    def __init__(self,tau0:float = 0.04, # init tau
+            problem:str = "PandaReachDense-v3", # panda-gym env 
+            name:str = 'default', # name of the agent
+            buffer_size:int = 20000,
+            learning_rate:list=[0.01,0.001,0.002], # lr for Q,u,tau
+            render:bool= False,
+            beta:float=2.0 # communication cost constant
+            ):
+        super().__init__(tau0,problem,name,buffer_size,learning_rate)
+        
+        self.beta = beta
+
+        if render:
+            self.env = gym.make(self.problem,render_mode='human')
+
+    def get_observation_space_dim(self) -> int:
+        obs_dim = self.env.observation_space['observation'].shape[0]
+        achieved_goal_dim = self.env.observation_space['achieved_goal'].shape[0]
+        desired_goal_dim = self.env.observation_space['desired_goal'].shape[0]
+        return obs_dim+achieved_goal_dim+desired_goal_dim
+        
+    def policy(self, state, IsExploration=True):
+        u,tau = self.actor(state)
+        u,tau = tf.squeeze(u),tf.squeeze(tau)
+        
+        # Adding noise to action
+        if IsExploration:
+            self.noise.dt=float(tau)
+            noise = self.noise()
+            u = u.numpy() + noise[:-1]
+            tau = tau.numpy() + noise[-1]
+
+        # We make sure action is within bounds add triggerting time h bound
+        legal_u = np.clip(u, -self.env.action_space.high,self.env.action_space.high)
+        legal_tau = np.clip(tau,[0.01],[2.00])
+        return legal_u, legal_tau
+
+    def state_extract(self,observation):
+        obs = observation['observation']
+        achieved_goal = observation['achieved_goal']
+        desired_goal = observation['desired_goal']
+        state = np.append(np.append(obs,achieved_goal),desired_goal)
+        return np.expand_dims(state,axis=0)
+
+    def train_start(self,Ne=10, Ntau=0, Nu=99):
+        Nsum = Ntau+Nu
+
+        # To store reward history of each episode
+        ep_cost_list, ep_comcost_list = [],[]
+
+  
+        for ep in range(Ne):
+            observation, info = self.env.reset()
+            self.noise.reset()
+            old_state = self.state_extract(observation)
+            t=0.0   
+            while t<3.0:       
+                u,tau = self.policy(old_state)
+        
+                stage_reward = 0 
+                #stage reward for STC (communication cost is included here)
+                n_substeps = int(tau/self.env.sim.timestep)
+                self.env.sim.n_substeps=n_substeps
+                observation, reward, terminated, truncated, info = self.env.step(u)
+                t += self.env.sim.dt
+                state = self.state_extract(observation)
+            
+                for i in range(n_substeps):
+                    stage_reward += reward* np.exp(-self.alpha* i* self.env.sim.timestep) 
+                stage_reward -= self.beta
+                   
+                # Mean of last 100 episodes
+                 
+                self.buffer.record((old_state, np.append(u,tau), stage_reward, state))
+
+                self.learn(ep,tau_ep= Ntau, sum_ep= Nsum) #tau_ep=0 means only train actor_u
+                self.update_target(self.target_actor.variables, self.actor.variables, self.sigma)
+                self.update_target(self.target_critic.variables, self.critic.variables, self.sigma)
+
+                old_state = self.state_extract(observation)
+                
+
+                '''negtive episodic reward = episodic cost'''
+                ep_cost_list.append(-stage_reward/n_substeps)
+                ep_comcost_list.append(n_substeps)
+            
+            avg_cost = np.mean(ep_cost_list[-100:])
+            avg_comcost = np.mean(ep_comcost_list[-100:])
+            process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}[{}]{}   '.
+            format(ep,round(avg_cost,3),round(avg_comcost,3),terminated))
+    
+    def algorithm_stc(self,Ne:int=10000,retraining=True):
+        if retraining:
+            self.load(version = 'stc')
+        else: 
+            self.load(version = 'ptc')
+        self.train_start(Ne=Ne, Ntau=1, Nu=99)
         self.save(version = 'stc')
 
 if __name__ == '__main__':   

@@ -6,12 +6,13 @@ from tensorflow.keras import backend as K
 import numpy as np
 
 class ActorModel(Model):
-  def __init__(self,init_tau = 0.16):
+  def __init__(self,init_tau = 0.16, scale=8, action_dim=1, obs_dim=5):
     ''' init_tau is from [0.04, 0.50] '''
     super().__init__()
     init_tau = np.clip(init_tau, 0.01, 0.50)
     init_tau = np.arctanh(init_tau - 1.000001)
 
+    self.scale = scale
 
     u_init = tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
     tau_init = tf.constant_initializer(0)
@@ -19,12 +20,12 @@ class ActorModel(Model):
 
     self.d11 = Dense(128, activation="relu",name='u11')
     self.d12 = Dense(128, activation="relu",name='u12')
-    self.d13 = Dense(1, activation="tanh",name='u',kernel_initializer = u_init)
+    self.d13 = Dense(action_dim, activation="tanh",name='u',kernel_initializer = u_init)
 
     self.d21 = Dense(128, activation="relu",name='tau11')
     self.d22 = Dense(128, activation="relu",name='tau12')
     self.d23 = Dense(1, activation="tanh",name='tau',kernel_initializer=tau_init,bias_initializer=tau_init_bias)
-    self.__call__(Input(5))
+    self.__call__(Input(obs_dim))
     self.vars_u    = self.trainable_variables[0:6]
     self.vars_tau =  self.trainable_variables[6:12]
 
@@ -33,7 +34,7 @@ class ActorModel(Model):
     x1 = self.d11(inputs)
     x1 = self.d12(x1)
     u = self.d13(x1)   
-    u = 8 * u                     # torque u [N.m] (-2,2)
+    u = self.scale * u                     # torque u [N.m] (-2,2)
     
     x2 = self.d21(inputs)
     x2 = self.d22(x2)
@@ -42,7 +43,7 @@ class ActorModel(Model):
     return u,tau
 
 class CriticModel(Model):
-  def __init__(self):
+  def __init__(self,action_dim=1, obs_dim=5):
     super().__init__()
 
     self.concat_u = Concatenate()
@@ -58,7 +59,7 @@ class CriticModel(Model):
 
     self.dQ = Dense(1, activation="linear")
 
-    self.__call__([Input(5),Input(1),Input(1)])
+    self.__call__([Input(obs_dim),Input(action_dim),Input(1)])
 
   def call(self, inputs):
     inputs_u_x = self.concat_u([inputs[0],inputs[1]])
@@ -83,8 +84,9 @@ class STCActionNoise:
         Input u             : Ornstein-Uhlenbeck_process
         Triggering time tau : White noise
     '''
-    def __init__(self, mean = [0,0], std_deviation = [0.1,0.05], theta=0.15, dt=0.01):
+    def __init__(self, action_dim=1, mean = [0,0], std_deviation = [0.1,0.02], theta=0.15, dt=0.01):
         # Noise for u
+        self.action_dim = action_dim
         self.theta = theta
         self.miu_u = mean[0]
         self.sigma_u = std_deviation[0]
@@ -100,12 +102,12 @@ class STCActionNoise:
         x = (
             self.x_prev
             + self.theta * (self.miu_u - self.x_prev) * self.dt
-            + self.sigma_u * np.sqrt(self.dt) * np.random.normal()
+            + self.sigma_u * np.sqrt(self.dt) * np.random.normal(size=self.action_dim)
         )
         self.x_prev = x
 
         # Gaussian noise : https://en.wikipedia.org/wiki/Gaussian_noise
-        return x, np.random.normal(self.miu_tau,self.sigma_tau)
+        return np.append(x, np.random.normal(self.miu_tau,self.sigma_tau))
 
     def reset(self):
-        self.x_prev = self.miu_u
+        self.x_prev = np.ones(self.action_dim)*self.miu_u
