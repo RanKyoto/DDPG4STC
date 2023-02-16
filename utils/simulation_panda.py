@@ -70,7 +70,7 @@ def simulation(agent:SelfDDPG4STC_Panda,IsPlot=True,x0=[0,0,-np.pi,0],seed:int=-
         
         temp.plot(t_list,tau_list,color='red',label=r'$\tau$') #input
         temp.legend()
-        temp.set_ylim(0,0.3)
+        temp.set_ylim(0,0.5)
         axs[1].set_ylabel(r'action')
         axs[1].margins(x=0)
         axs[1].grid()

@@ -18,23 +18,21 @@ def training(task='PandaReachDense-v3'):
     os.environ['CUDA_VISIBLE_DEVICES']='0' # use GPU
     agent = DDPG4STC_Panda(problem= task,
                     learning_rate=[0.01,0.001,0.0005],
-                    name='demo',render=False,beta=1)
-    agent.algorithm_ptc(Ne=1000)
-    agent.algorithm_stc(Ne=1000)
+                    name='demo',render=False,beta=1.0)
+    #agent.algorithm_ptc(Ne=1000)
+    agent.algorithm_stc(Ne=1000,retraining=True)
 
 
-def training_all():
-    for task in tasks:
-        print(task)
-        print("----------------------")
-        training(task=task)
-    testing_all()
-
+# def training_all():
+#     for task in tasks:
+#         print(task)
+#         print("----------------------")
+#         training(task=task)
 
 def testing_all():
     cost_list = [] 
     for task in tasks:
-        cost = demo('ptc',show=False)
+        cost = demo('stc',show=False)
         cost_list.append(cost)
     for i in range(5):
         print(tasks[i],cost_list[i])
@@ -49,15 +47,15 @@ def demo(Type='stc',task='PandaReachDense-v3',show = True):
     '''
     agent = DDPG4STC_Panda(problem= task,
                         name='demo',
-                        render=True)
+                        render=True,
+                        beta=1.0)
     agent.load(version=Type,IsLoadReplay=False)
     cost = simulation(agent=agent,seed=315)
     return cost
 
 if __name__ == '__main__':
-
-    print(tasks[1])
+    print(tasks[0])
     print("----------------------")
-    #training(task=tasks[1])
-    cost = demo('ptc',task=tasks[1])
+    #training(tasks[0])
+    cost = demo('stc',task=tasks[0])
     print(cost)
