@@ -15,7 +15,7 @@ def simulation(agent:SelfDDPG4STC,IsPlot=True,x0=[0,0,-np.pi,0],IsNoise=True,IsZ
     cost_list,stagecost_list,trigger= [0],[0],[1]
     t = 0
 
-    while True:    
+    while t<10:    
         action = agent.policy(np.expand_dims(old_state,axis=0),IsExploration=False)
 
         stage_cost = - agent.beta   #reward for STC (including communication cost)
@@ -40,16 +40,11 @@ def simulation(agent:SelfDDPG4STC,IsPlot=True,x0=[0,0,-np.pi,0],IsNoise=True,IsZ
             stagecost_list.append(-stage_cost)
             cost_list.append(-episodic_reward)
             trigger.append(0)
-            if(done):
-                break
+
         trigger[-1] = 1
         trigger[-2] = 1
    
         episodic_reward += stage_cost * np.exp(- agent.alpha * last_t)
-
-        # End this episode when `done` is True
-        if done:
-            break
         old_state = state
     
 

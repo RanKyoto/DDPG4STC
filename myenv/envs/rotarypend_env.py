@@ -100,6 +100,8 @@ class RotaryPendulumEnv(gym.Env):
         self.C11= 1/2 * self.Mp * self.Lp * self.g
         '''Noise Enable'''
         self.W_en = 1
+        self.W11=0.09
+        self.W22=0.25
         ''' State Space Representation '''
         Jt = self.Jr*self.Jp + self.Mp*((self.Lp/2)**2)*self.Jr + self.Jp*self.Mp*(self.Lr**2)
         #!!!Note that the Related state should be [theta,phi,theta_dot,phi_dot],
@@ -182,9 +184,9 @@ class RotaryPendulumEnv(gym.Env):
         alphaacc = (a * f - c * e)/tmp 
         
         theta = theta + self.dt * theta_dot
-        theta_dot = theta_dot + self.dt * thetaacc +  self.W_en * self.acc_noise(variance=4)
+        theta_dot = theta_dot + self.dt * thetaacc +  self.W_en * self.acc_noise(variance=self.W11)
         alpha = alpha + self.dt * alpha_dot
-        alpha_dot = alpha_dot + self.dt * alphaacc +  self.W_en * self.acc_noise(variance=16)
+        alpha_dot = alpha_dot + self.dt * alphaacc +  self.W_en * self.acc_noise(variance=self.W22)
        
         self.state = (theta, theta_dot, angle_normalize(alpha), alpha_dot)
 
@@ -218,7 +220,7 @@ class RotaryPendulumEnv(gym.Env):
     
     def acc_noise(self,variance = 1):
         '''Disturbance is represented as Wiener Process variance = sigma^2 '''
-        return np.random.normal(0,variance*self.dt)
+        return np.random.normal(0,np.sqrt(variance*self.dt))
 
     def _get_obs(self):
         '''

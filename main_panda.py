@@ -1,3 +1,13 @@
+"""
+Title: Deep Reinforcement Learning for Continuous-Time 
+       Self-Triggered Control with Experimental Evaluation
+Author: Ran,Wang
+Date created: 2023/02/14
+Last modified: 2023/02/14
+Description: Implementing Deep Reinforcement Learning for
+             Continuous-time Self-triggered Control (DDPG4STC)
+"""
+
 import sys,os,warnings
 warnings.filterwarnings("ignore")
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -19,8 +29,8 @@ def training(task='PandaReachDense-v3'):
     agent = DDPG4STC_Panda(problem= task,
                     learning_rate=[0.01,0.001,0.0005],
                     name='demo',render=False,beta=1.0)
-    #agent.algorithm_ptc(Ne=1000)
-    agent.algorithm_stc(Ne=1000,retraining=True)
+    agent.algorithm_ptc(Ne=1000)
+    agent.algorithm_stc(Ne=2000,Nu=99)
 
 
 # def training_all():
@@ -54,8 +64,11 @@ def demo(Type='stc',task='PandaReachDense-v3',show = True):
     return cost
 
 if __name__ == '__main__':
+    '''Step 1 : Trainging a STC policy'''
     print(tasks[0])
     print("----------------------")
     #training(tasks[0])
-    cost = demo('stc',task=tasks[0])
-    print(cost)
+    
+    '''Step 2 : Show the simulation results'''
+    demo('stc',task=tasks[0])
+    

@@ -78,31 +78,38 @@ class DDPG4STC():
     def get_observation_space_dim(self)->int:
         return self.env.observation_space.shape[0]
 
-    def load(self,version:str='v0', IsLoadReplay = True):
+    def load(self,version:str='v0', IsLoadReplay = True, IsLoadCritic = True):
         '''load check point'''
         path = './data/{}_{}/'.format(self.name,version)
         if IsLoadReplay: 
-            self.buffer = pickle.load(open(path + 'buffer.replay','rb'))
+            self.load_replay(path=path)
         self.actor.load_weights(path + "actor.h5")
-        self.critic.load_weights(path + "critic.h5")
         self.target_actor.load_weights(path + "target_actor.h5")
-        self.target_critic.load_weights(path + "target_critic.h5")
+        if IsLoadCritic:
+            self.critic.load_weights(path + "critic.h5")
+            self.target_critic.load_weights(path + "target_critic.h5")
     
     def save(self,version:str='v0'):
         '''save check point'''
         path = './data/{}_{}/'.format(self.name,version) 
         mkdir(path)
-        pickle.dump(self.buffer,open(path + 'buffer.replay','wb'))
+        self.save_replay(path=path)
         self.actor.save_weights(path + "actor.h5")
         self.critic.save_weights(path + "critic.h5")
         self.target_actor.save_weights(path + "target_actor.h5")
         self.target_critic.save_weights(path + "target_critic.h5")
 
+    def load_replay(self,path,name='buffer'):
+        self.buffer = pickle.load(open(path + '{}.replay'.format(name),'rb'))
+
+    def save_replay(self,path,name='buffer'):
+        pickle.dump(self.buffer,open(path + '{}.replay'.format(name),'wb'))
+
     @tf.function
     def update_target(self, target_weights, weights, sigma):
         for (a, b) in zip(target_weights, weights):
             a.assign(b * sigma + a * (1 - sigma))
-
+    
     @tf.function 
     def update_u(self,state_batch, action_batch, reward_batch, next_state_batch):
         with tf.GradientTape() as tape:
@@ -158,14 +165,13 @@ class DDPG4STC():
             
             tau_theta_term =  tf.exp(-self.alpha * tau) * Vx_prime
 
-            # Used `-value` as we want to maximize the value given
-            # by the critic for our actions
             tau_loss = -tf.math.reduce_mean(Q + tau_theta_term)
 
         tau_grad = tape.gradient(tau_loss, self.actor.vars_tau)
         self.tau_optimizer.apply_gradients(
              zip(tau_grad, self.actor.vars_tau)
         )
+
 
     def learn(self,ep,tau_ep=1, sum_ep= 100):
         state_batch, action_batch, reward_batch, next_state_batch = self.buffer.get_minibatch()
@@ -248,15 +254,18 @@ class DDPG4STC():
      
             process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}[{}]    '.format(ep,round(avg_cost,3),round(avg_comcost,3)))
          
-
-
     def algorithm_ptc(self,Ne:int=10000):
         self.train_start(Ne=Ne, Ntau=0, Nu=99)
         self.save(version = 'ptc')
 
-    def algorithm_stc(self,Ne:int=10000):
+    def algorithm_stc(self,Ne:int=10000,Nu:int=499):
         self.load(version = 'ptc')
-        self.train_start(Ne=Ne, Ntau=1, Nu=499)
+        self.train_start(Ne=Ne, Ntau=1, Nu=Nu)
+        self.save(version = 'stc')
+
+    def algorithm_stc_enhance(self,Ne:int=10000,Ntau:int=1,Nu:int=499):
+        self.load(version = 'stc')
+        self.train_start(Ne=Ne, Ntau=Ntau, Nu=Nu)
         self.save(version = 'stc')
 
 class DDPG4STC_Panda(DDPG4STC):
@@ -351,13 +360,7 @@ class DDPG4STC_Panda(DDPG4STC):
             process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}[{}]{}   '.
             format(ep,round(avg_cost,3),round(avg_comcost,3),terminated))
     
-    def algorithm_stc(self,Ne:int=10000,retraining=True):
-        if retraining:
-            self.load(version = 'stc')
-        else: 
-            self.load(version = 'ptc')
-        self.train_start(Ne=Ne, Ntau=1, Nu=99)
-        self.save(version = 'stc')
+
 
 if __name__ == '__main__':   
     pass

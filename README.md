@@ -9,14 +9,22 @@ Ran Wang and Kenji Kashima.
 Advanced Robotics (2023).(pending review).
 ```
 
-These code testing our work
-Include
-
+# Setup
+## DownloadZip or use git conmand:
+```
+git clone https://github.com/RanKyoto/DDPG4STC.git 
+```
+## Install required python packages
 ```
 pip install panda-gym
 pip install gym==0.21.0
 pip install tensorflow-gpu
-pip install gast==0.3.3
+pip install matplotlab
 ```
 
-## testing
+# Play with DDPG4STC
+## DDPG4STC with a rotary inverted pendulum
+See "main.py"
+
+## DDPG4STC with panda-gym
+See "main_panda.py"
