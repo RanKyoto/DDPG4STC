@@ -18,6 +18,7 @@ git clone https://github.com/RanKyoto/DDPG4STC.git
 ```
 pip install panda-gym
 pip install gym==0.21.0
+pip install numpy=1.23.5 --upgrade
 pip install tensorflow-gpu
 pip install matplotlab
 ```
