@@ -18,8 +18,8 @@ def training():
 
     os.environ['CUDA_VISIBLE_DEVICES']='1' # use GPU
     agent = DDPG4STC(problem= "RotaryPend-v0",name='demo')
-    #agent.algorithm_ptc(Ne=20000)
-    #agent.algorithm_stc(Ne=20000)
+    agent.algorithm_ptc(Ne=20000)
+    agent.algorithm_stc(Ne=20000)
 
 def demo(Type='stc',Disturbunce=False):
     '''
@@ -35,10 +35,10 @@ def demo(Type='stc',Disturbunce=False):
 
 if __name__ == '__main__':
     '''Step 1 : Trainging a STC policy'''
-    #os.environ['CUDA_VISIBLE_DEVICES']='1' # use GPU   
-    #training()
+    os.environ['CUDA_VISIBLE_DEVICES']='1' # use GPU   
+    training()
     
-    '''Step 2 : Show the simulation results'''
-    agent = DDPG4STC(problem= "RotaryPend-v0",name='demo')
-    demo(Type='stc',Disturbunce=False)
+    # '''Step 2 : Show the simulation results'''
+    # agent = DDPG4STC(problem= "RotaryPend-v0",name='demo')
+    # demo(Type='stc',Disturbunce=False)
     pass

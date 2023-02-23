@@ -22,11 +22,11 @@ from utils.simulation_panda import simulation
 tasks = ["PandaReachDense-v3","PandaPushDense-v3","PandaSlideDense-v3",
         "PandaPickAndPlaceDense-v3","PandaStackDense-v3"]
 
-def training(task='PandaReachDense-v3'):
+def training(task='PandaReachDense-v3',init_tau=0.04):
     '''training an STC policy for a panda task'''
 
     os.environ['CUDA_VISIBLE_DEVICES']='0' # use GPU
-    agent = DDPG4STC_Panda(problem= task,
+    agent = DDPG4STC_Panda(tau0=init_tau,problem= task,
                     learning_rate=[0.01,0.001,0.0005],
                     name='demo',render=False,beta=1.0)
     agent.algorithm_ptc(Ne=1000)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     print(tasks[0])
     print("----------------------")
     #training(tasks[0])
-    
+
     '''Step 2 : Show the simulation results'''
     demo('stc',task=tasks[0])
     

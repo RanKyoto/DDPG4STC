@@ -22,6 +22,7 @@ class DDPG4STC():
                 problem:str = "RotaryPend-v0", # gym env 
                 name:str = 'default', # name of the agent
                 buffer_size:int = 500000, 
+                batch_size:int=128,
                 learning_rate:list=[0.001,0.0001,0.0005] # lr for Q,u,tau
                 ):
 
@@ -65,7 +66,7 @@ class DDPG4STC():
         self.sigma = 0.01
         # replay buffer
         self.buffer = ReplayBuffer(action_dim=action_dim ,obs_dim= obs_dim,
-                    buffer_capacity = buffer_size, batch_size = 128)
+                    buffer_capacity = buffer_size, batch_size = batch_size)
         # STC action noise
         self.noise = STCActionNoise(action_dim=action_dim)
 
@@ -141,6 +142,8 @@ class DDPG4STC():
             zip(u_grad, self.actor.vars_u)
         )
 
+        return critic_loss
+
     @tf.function 
     def update_tau(self,state_batch, action_batch, reward_batch, next_state_batch,Vx_prime):
         with tf.GradientTape() as tape:
@@ -172,17 +175,20 @@ class DDPG4STC():
              zip(tau_grad, self.actor.vars_tau)
         )
 
+        return critic_loss
+
 
     def learn(self,ep,tau_ep=1, sum_ep= 100):
         state_batch, action_batch, reward_batch, next_state_batch = self.buffer.get_minibatch()
         #only update tau at 1st step of every N_u + N_tau steps
         if(ep % sum_ep >= tau_ep):
-            self.update_u(state_batch, action_batch, reward_batch, next_state_batch)
+            loss = self.update_u(state_batch, action_batch, reward_batch, next_state_batch)
         else:
             u_prime,tau_prime = self.actor(next_state_batch)
             Vx_prime = self.critic([next_state_batch, u_prime,tau_prime])
-            self.update_tau(state_batch, action_batch, reward_batch, next_state_batch,Vx_prime)
-          
+            loss = self.update_tau(state_batch, action_batch, reward_batch, next_state_batch,Vx_prime)
+        return loss
+
     def policy(self,state, IsExploration=True):
         actions = tf.squeeze(self.actor(state))
         
@@ -197,6 +203,7 @@ class DDPG4STC():
         return np.squeeze(legal_actions)
 
     def train_start(self,Ne=10, Ntau=0, Nu=99):
+        cost_list = [] 
         Nsum = Ntau+Nu
 
         # To store reward history of each episode
@@ -236,7 +243,8 @@ class DDPG4STC():
                 episodic_reward += stage_reward 
                 episodic_comcost+= com_cost
 
-                self.learn(ep,tau_ep= Ntau, sum_ep= Nsum) #tau_ep=0 means only train actor_u
+                cost = self.learn(ep,tau_ep= Ntau, sum_ep= Nsum) #tau_ep=0 means only train actor_u
+                cost_list.append(float(cost))
                 self.update_target(self.target_actor.variables, self.actor.variables, self.sigma)
                 self.update_target(self.target_critic.variables, self.critic.variables, self.sigma)
  
@@ -253,7 +261,8 @@ class DDPG4STC():
             avg_comcost = np.mean(ep_comcost_list[-100:])
      
             process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}[{}]    '.format(ep,round(avg_cost,3),round(avg_comcost,3)))
-         
+        return cost_list
+
     def algorithm_ptc(self,Ne:int=10000):
         self.train_start(Ne=Ne, Ntau=0, Nu=99)
         self.save(version = 'ptc')
@@ -273,11 +282,12 @@ class DDPG4STC_Panda(DDPG4STC):
             problem:str = "PandaReachDense-v3", # panda-gym env 
             name:str = 'default', # name of the agent
             buffer_size:int = 20000,
+            batch_size:int=128,
             learning_rate:list=[0.01,0.001,0.002], # lr for Q,u,tau
             render:bool= False,
             beta:float=2.0 # communication cost constant
             ):
-        super().__init__(tau0,problem,name,buffer_size,learning_rate)
+        super().__init__(tau0,problem,name,buffer_size,batch_size,learning_rate)
         
         self.beta = beta
 
@@ -314,6 +324,7 @@ class DDPG4STC_Panda(DDPG4STC):
         return np.expand_dims(state,axis=0)
 
     def train_start(self,Ne=10, Ntau=0, Nu=99):
+        cost_list,success_list = [], []
         Nsum = Ntau+Nu
 
         # To store reward history of each episode
@@ -344,7 +355,8 @@ class DDPG4STC_Panda(DDPG4STC):
                  
                 self.buffer.record((old_state, np.append(u,tau), stage_reward, state))
 
-                self.learn(ep,tau_ep= Ntau, sum_ep= Nsum) #tau_ep=0 means only train actor_u
+                cost = self.learn(ep,tau_ep= Ntau, sum_ep= Nsum) #tau_ep=0 means only train actor_u
+                cost_list.append(float(cost))
                 self.update_target(self.target_actor.variables, self.actor.variables, self.sigma)
                 self.update_target(self.target_critic.variables, self.critic.variables, self.sigma)
 
@@ -354,13 +366,13 @@ class DDPG4STC_Panda(DDPG4STC):
                 '''negtive episodic reward = episodic cost'''
                 ep_cost_list.append(-stage_reward/n_substeps)
                 ep_comcost_list.append(n_substeps)
-            
+            success_list.append(terminated)
             avg_cost = np.mean(ep_cost_list[-100:])
             avg_comcost = np.mean(ep_comcost_list[-100:])
             process_bar(ep/Ne,total_length=50,end_str='ep={},cost={}[{}]{}   '.
             format(ep,round(avg_cost,3),round(avg_comcost,3),terminated))
     
-
+        return cost_list,success_list
 
 if __name__ == '__main__':   
     pass
