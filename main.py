@@ -39,6 +39,5 @@ if __name__ == '__main__':
     # training()
     
     # '''Step 2 : Show the simulation results'''
-    # agent = DDPG4STC(problem= "RotaryPend-v0",name='demo')
     demo(Type='stc',Disturbunce=False)
     pass
