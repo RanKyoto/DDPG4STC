@@ -2,11 +2,25 @@
 Ran Wang 2023/02/08 Kyoto University
 
 Contains supplementary simulation code for the work:
-
 ```
-Ran Wang and Kenji Kashima. 
-"Deep Reinforcement Learning for Continuous-Time Self-Triggered Control with Experimental Evaluation." 
-Advanced Robotics (2023).(pending review).
+Ran Wang & Kenji Kashima (2023)
+Deep reinforcement learning for continuous-time self-triggered control with experimental evaluation,
+Advanced Robotics, DOI: 10.1080/01691864.2023.2229886
+```
+## Bibtex
+```
+@article{ranDDPG4STC2023,
+author = {Ran Wang and Kenji Kashima},
+title = {Deep reinforcement learning for continuous-time self-triggered control with experimental evaluation},
+journal = {Advanced Robotics},
+volume = {0},
+number = {0},
+pages = {1-13},
+year  = {2023},
+publisher = {Taylor & Francis},
+doi = {10.1080/01691864.2023.2229886},
+URL = {https://doi.org/10.1080/01691864.2023.2229886}
+}
 ```
 
 # Setup
